@@ -1,0 +1,37 @@
+{
+  "tests": [
+    {
+      "name": "Join room",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "join",
+        "roomCode": "ABC123",
+        "peerId": "peer1",
+        "nickname": "Test User"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "status": "joined",
+        "peers": []
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Poll for messages",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "poll",
+        "roomCode": "ABC123",
+        "peerId": "peer1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "offers": {},
+        "answers": {}
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

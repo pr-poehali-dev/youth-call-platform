@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
+import { WebRTCManager } from '@/lib/webrtc';
 
 type Screen = 'auth' | 'hub' | 'call' | 'analytics';
 
@@ -30,6 +31,8 @@ const Index = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<{user: string, text: string}[]>([]);
   const [currentCall, setCurrentCall] = useState<CallData | null>(null);
+  const webrtcManager = useRef<WebRTCManager | null>(null);
+  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const { toast } = useToast();
 
   const generateCallCode = () => {
@@ -103,6 +106,42 @@ const Index = () => {
       setMediaStream(stream);
       setMicPermission('granted');
       setMicOn(true);
+      
+      if (currentCall && !webrtcManager.current) {
+        const manager = new WebRTCManager(currentCall.code, nickname);
+        await manager.initialize(stream);
+        
+        manager.onPeerStream((peerId, remoteStream) => {
+          const audio = new Audio();
+          audio.srcObject = remoteStream;
+          audio.autoplay = true;
+          audioRefs.current.set(peerId, audio);
+          
+          setCurrentCall(prev => {
+            if (!prev) return prev;
+            const peerNickname = `Участник #${audioRefs.current.size}`;
+            if (!prev.participants.includes(peerNickname)) {
+              return {
+                ...prev,
+                participants: [...prev.participants, peerNickname]
+              };
+            }
+            return prev;
+          });
+        });
+        
+        manager.onPeerLeft((peerId) => {
+          const audio = audioRefs.current.get(peerId);
+          if (audio) {
+            audio.pause();
+            audio.srcObject = null;
+            audioRefs.current.delete(peerId);
+          }
+        });
+        
+        webrtcManager.current = manager;
+      }
+      
       toast({ title: '🎤 Микрофон подключён' });
     } catch (error) {
       setMicPermission('denied');
@@ -126,10 +165,29 @@ const Index = () => {
       audioTracks.forEach(track => {
         track.enabled = !track.enabled;
       });
-      setMicOn(!micOn);
+      const newMicState = !micOn;
+      setMicOn(newMicState);
+      
+      if (webrtcManager.current) {
+        webrtcManager.current.toggleAudio(newMicState);
+      }
+      
       toast({ title: micOn ? '🔇 Микрофон выключен' : '🎤 Микрофон включён' });
     }
   };
+  
+  useEffect(() => {
+    return () => {
+      if (webrtcManager.current) {
+        webrtcManager.current.destroy();
+      }
+      audioRefs.current.forEach(audio => {
+        audio.pause();
+        audio.srcObject = null;
+      });
+      audioRefs.current.clear();
+    };
+  }, []);
 
   const AuthScreen = () => (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
