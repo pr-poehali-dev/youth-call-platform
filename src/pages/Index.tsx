@@ -31,6 +31,7 @@ const Index = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<{user: string, text: string}[]>([]);
   const [currentCall, setCurrentCall] = useState<CallData | null>(null);
+  const [remotePeers, setRemotePeers] = useState<Map<string, string>>(new Map());
   const webrtcManager = useRef<WebRTCManager | null>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const { toast } = useToast();
@@ -111,22 +112,24 @@ const Index = () => {
         const manager = new WebRTCManager(currentCall.code, nickname);
         await manager.initialize(stream);
         
-        manager.onPeerStream((peerId, remoteStream) => {
+        manager.onPeerJoined((peerId, peerNickname) => {
+          setRemotePeers(prev => {
+            const newMap = new Map(prev);
+            newMap.set(peerId, peerNickname);
+            return newMap;
+          });
+        });
+        
+        manager.onPeerStream((peerId, remoteStream, peerNickname) => {
           const audio = new Audio();
           audio.srcObject = remoteStream;
           audio.autoplay = true;
           audioRefs.current.set(peerId, audio);
           
-          setCurrentCall(prev => {
-            if (!prev) return prev;
-            const peerNickname = `Участник #${audioRefs.current.size}`;
-            if (!prev.participants.includes(peerNickname)) {
-              return {
-                ...prev,
-                participants: [...prev.participants, peerNickname]
-              };
-            }
-            return prev;
+          setRemotePeers(prev => {
+            const newMap = new Map(prev);
+            newMap.set(peerId, peerNickname);
+            return newMap;
           });
         });
         
@@ -137,6 +140,12 @@ const Index = () => {
             audio.srcObject = null;
             audioRefs.current.delete(peerId);
           }
+          
+          setRemotePeers(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(peerId);
+            return newMap;
+          });
         });
         
         webrtcManager.current = manager;
@@ -412,7 +421,14 @@ const Index = () => {
                 В эфире
               </Badge>
             </div>
-            <Button variant="destructive" onClick={() => setScreen('hub')} className="hover-scale">
+            <Button variant="destructive" onClick={() => {
+              if (webrtcManager.current) {
+                webrtcManager.current.destroy();
+                webrtcManager.current = null;
+              }
+              setRemotePeers(new Map());
+              setScreen('hub');
+            }} className="hover-scale">
               <Icon name="PhoneOff" className="mr-2" size={18} />
               Выйти из звонка
             </Button>
@@ -424,17 +440,27 @@ const Index = () => {
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center space-y-4 animate-fade-in">
                     <div className="flex justify-center gap-4 flex-wrap">
-                      {currentCall.participants.map((p, i) => (
-                        <div key={i} className="flex flex-col items-center gap-2 animate-scale-in">
-                          <div className="w-24 h-24 rounded-2xl gradient-primary flex items-center justify-center relative">
-                            <Icon name="User" size={40} className="text-white" />
-                            {micOn && (
-                              <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center border-2 border-background">
-                                <Icon name="Mic" size={14} className="text-white" />
-                              </div>
-                            )}
+                      <div className="flex flex-col items-center gap-2 animate-scale-in">
+                        <div className="w-24 h-24 rounded-2xl gradient-primary flex items-center justify-center relative">
+                          <Icon name="User" size={40} className="text-white" />
+                          {micOn && (
+                            <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center border-2 border-background">
+                              <Icon name="Mic" size={14} className="text-white" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium">{nickname} (Вы)</span>
+                      </div>
+                      
+                      {Array.from(remotePeers.entries()).map(([peerId, peerNickname]) => (
+                        <div key={peerId} className="flex flex-col items-center gap-2 animate-scale-in">
+                          <div className="w-24 h-24 rounded-2xl bg-secondary/30 flex items-center justify-center relative">
+                            <Icon name="User" size={40} className="text-secondary" />
+                            <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-green-500 flex items-center justify-center border-2 border-background animate-pulse-glow">
+                              <Icon name="Mic" size={14} className="text-white" />
+                            </div>
                           </div>
-                          <span className="text-sm font-medium">{p}</span>
+                          <span className="text-sm font-medium">{peerNickname}</span>
                         </div>
                       ))}
                     </div>

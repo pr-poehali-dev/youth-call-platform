@@ -20,8 +20,9 @@ export class WebRTCManager {
   private localStream: MediaStream | null = null;
   private peers: Map<string, WebRTCPeer> = new Map();
   private pollingInterval: number | null = null;
-  private onPeerStreamCallback?: (peerId: string, stream: MediaStream) => void;
+  private onPeerStreamCallback?: (peerId: string, stream: MediaStream, nickname: string) => void;
   private onPeerLeftCallback?: (peerId: string) => void;
+  private onPeerJoinedCallback?: (peerId: string, nickname: string) => void;
 
   constructor(roomCode: string, nickname: string) {
     this.peerId = this.generatePeerId();
@@ -79,7 +80,7 @@ export class WebRTCManager {
       if (peer) {
         peer.stream = remoteStream;
         if (this.onPeerStreamCallback) {
-          this.onPeerStreamCallback(peerId, remoteStream);
+          this.onPeerStreamCallback(peerId, remoteStream, nickname);
         }
       }
     };
@@ -91,6 +92,10 @@ export class WebRTCManager {
     };
 
     this.peers.set(peerId, { id: peerId, nickname, connection: pc });
+
+    if (this.onPeerJoinedCallback) {
+      this.onPeerJoinedCallback(peerId, nickname);
+    }
 
     if (createOffer) {
       const offer = await pc.createOffer();
@@ -220,8 +225,12 @@ export class WebRTCManager {
     }
   }
 
-  onPeerStream(callback: (peerId: string, stream: MediaStream) => void) {
+  onPeerStream(callback: (peerId: string, stream: MediaStream, nickname: string) => void) {
     this.onPeerStreamCallback = callback;
+  }
+
+  onPeerJoined(callback: (peerId: string, nickname: string) => void) {
+    this.onPeerJoinedCallback = callback;
   }
 
   onPeerLeft(callback: (peerId: string) => void) {
