@@ -23,7 +23,9 @@ const Index = () => {
   const [password, setPassword] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [micOn, setMicOn] = useState(true);
+  const [micOn, setMicOn] = useState(false);
+  const [micPermission, setMicPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [messages, setMessages] = useState<{user: string, text: string}[]>([]);
@@ -52,7 +54,7 @@ const Index = () => {
     toast({ title: `Аккаунт создан! Добро пожаловать, ${nickname}! 🎉` });
   };
 
-  const handleCreateCall = () => {
+  const handleCreateCall = async () => {
     const code = generateCallCode();
     const call: CallData = {
       id: Math.random().toString(),
@@ -63,10 +65,11 @@ const Index = () => {
     };
     setCurrentCall(call);
     setScreen('call');
+    await requestMicrophoneAccess();
     toast({ title: `Комната создана! Код: ${code}`, description: 'Поделитесь кодом с участниками' });
   };
 
-  const handleJoinCall = () => {
+  const handleJoinCall = async () => {
     if (!joinCode.trim()) {
       toast({ title: 'Введите код комнаты', variant: 'destructive' });
       return;
@@ -80,6 +83,7 @@ const Index = () => {
     };
     setCurrentCall(call);
     setScreen('call');
+    await requestMicrophoneAccess();
     toast({ title: `Подключено к комнате ${joinCode}` });
   };
 
@@ -91,6 +95,40 @@ const Index = () => {
 
   const addReaction = (emoji: string) => {
     toast({ title: `${nickname} отправил ${emoji}` });
+  };
+
+  const requestMicrophoneAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMediaStream(stream);
+      setMicPermission('granted');
+      setMicOn(true);
+      toast({ title: '🎤 Микрофон подключён' });
+    } catch (error) {
+      setMicPermission('denied');
+      setMicOn(false);
+      toast({ 
+        title: '❌ Доступ к микрофону запрещён', 
+        description: 'Разрешите доступ в настройках браузера',
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const toggleMicrophone = async () => {
+    if (!mediaStream && !micOn) {
+      await requestMicrophoneAccess();
+      return;
+    }
+
+    if (mediaStream) {
+      const audioTracks = mediaStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setMicOn(!micOn);
+      toast({ title: micOn ? '🔇 Микрофон выключен' : '🎤 Микрофон включён' });
+    }
   };
 
   const AuthScreen = () => (
@@ -371,7 +409,12 @@ const Index = () => {
                     placeholder="Сообщение..."
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
                   />
                   <Button size="sm" onClick={handleSendMessage} className="gradient-accent">
                     <Icon name="Send" size={16} />
@@ -386,7 +429,7 @@ const Index = () => {
               <Button 
                 size="lg"
                 variant={micOn ? "default" : "destructive"}
-                onClick={() => setMicOn(!micOn)}
+                onClick={toggleMicrophone}
                 className="w-14 h-14 rounded-full hover-scale"
               >
                 <Icon name={micOn ? "Mic" : "MicOff"} size={20} />
