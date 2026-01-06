@@ -79,15 +79,15 @@ const Index = () => {
     }
     const call: CallData = {
       id: Math.random().toString(),
-      code: joinCode,
-      participants: [nickname, 'Участник #2'],
+      code: joinCode.toUpperCase(),
+      participants: [nickname],
       startTime: new Date(),
       duration: 0
     };
     setCurrentCall(call);
     setScreen('call');
     await requestMicrophoneAccess();
-    toast({ title: `Подключено к комнате ${joinCode}` });
+    toast({ title: `Подключено к комнате ${joinCode.toUpperCase()}` });
   };
 
   const handleSendMessage = () => {
@@ -462,22 +462,18 @@ const Index = () => {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex gap-2">
                   <Input 
                     placeholder="Сообщение..."
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
+                    type="text"
+                    autoComplete="off"
                   />
-                  <Button size="sm" onClick={handleSendMessage} className="gradient-accent">
+                  <Button type="submit" size="sm" className="gradient-accent">
                     <Icon name="Send" size={16} />
                   </Button>
-                </div>
+                </form>
               </Card>
             )}
           </div>
